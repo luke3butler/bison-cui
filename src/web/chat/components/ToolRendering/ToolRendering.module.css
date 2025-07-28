@@ -4,6 +4,26 @@
   font-family: 'Roboto Mono', monospace;
   color: var(--color-text-primary);
   margin-bottom: var(--spacing-xs);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.toolLabel.clickable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.toolLabel.clickable:hover {
+  color: var(--color-text-primary);
+  opacity: 0.8;
+}
+
+.collapseIcon {
+  display: flex;
+  align-items: center;
+  color: var(--color-text-secondary);
+  transition: color var(--transition-fast);
 }
 
 .toolName {
@@ -20,6 +40,28 @@
   flex-direction: column;
   gap: var(--spacing-xs);
   margin-top: -2px;
+}
+
+/* Tool Content Collapse Animation */
+.toolContentWrapper {
+  display: grid;
+  transition: grid-template-rows var(--transition-normal), opacity var(--transition-normal);
+  will-change: grid-template-rows, opacity;
+  contain: layout style paint;
+}
+
+.toolContentExpanded {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+.toolContentCollapsed {
+  grid-template-rows: 0fr;
+  opacity: 0;
+}
+
+.toolContentWrapper > * {
+  overflow: hidden;
 }
 
 .toolSummary {

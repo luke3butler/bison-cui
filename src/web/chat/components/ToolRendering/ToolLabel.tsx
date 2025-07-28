@@ -1,4 +1,5 @@
 import React from 'react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import { formatFilePath, formatToolInput, extractDomain } from '../../utils/tool-utils';
 import styles from './ToolRendering.module.css';
 
@@ -6,10 +7,11 @@ interface ToolLabelProps {
   toolName: string;
   toolInput: any;
   workingDirectory?: string;
-  onClick?: () => void;
+  isCollapsed?: boolean;
+  onToggle?: () => void;
 }
 
-export function ToolLabel({ toolName, toolInput, workingDirectory, onClick }: ToolLabelProps) {
+export function ToolLabel({ toolName, toolInput, workingDirectory, isCollapsed = false, onToggle }: ToolLabelProps) {
   
   const generateLabel = (): React.ReactNode => {
     switch (toolName) {
@@ -130,10 +132,14 @@ export function ToolLabel({ toolName, toolInput, workingDirectory, onClick }: To
 
   return (
     <div 
-      className={styles.toolLabel} 
-      onClick={onClick}
-      style={onClick ? { cursor: 'pointer' } : undefined}
+      className={`${styles.toolLabel} ${onToggle ? styles.clickable : ''}`} 
+      onClick={onToggle}
     >
+      {onToggle && (
+        <span className={styles.collapseIcon}>
+          {isCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+        </span>
+      )}
       {generateLabel()}
     </div>
   );

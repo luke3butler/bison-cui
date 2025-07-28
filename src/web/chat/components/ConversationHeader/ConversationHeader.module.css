@@ -99,6 +99,10 @@
   gap: 6px;
 }
 
+.collapseSelector {
+  margin-right: 8px;
+}
+
 .actionButton {
   display: flex;
   align-items: center;

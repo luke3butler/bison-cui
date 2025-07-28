@@ -2,6 +2,7 @@ import React from 'react';
 import { ArrowLeft, Archive, Bell } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../services/api';
+import { CollapseSelector } from '../CollapseSelector';
 import styles from './ConversationHeader.module.css';
 
 interface ConversationHeaderProps {
@@ -77,6 +78,8 @@ export function ConversationHeader({ title, sessionId, isArchived = false, subti
       </div>
 
       <div className={styles.rightSection}>
+        <CollapseSelector className={styles.collapseSelector} />
+        
         <button 
           className={styles.actionButton} 
           aria-label={isArchived ? "Unarchive Task" : "Archive Task"}

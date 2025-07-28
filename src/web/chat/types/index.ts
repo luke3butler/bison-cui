@@ -78,9 +78,12 @@ export interface WorkingDirectoriesResponse {
   totalCount: number;
 }
 
+export type { CollapseMode } from '../constants/collapse-modes';
+
 export interface Preferences {
   colorScheme: 'light' | 'dark' | 'system';
   language: string;
+  toolCollapseMode: CollapseMode;
 }
 
 // Tool result types
