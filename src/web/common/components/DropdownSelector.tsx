@@ -33,6 +33,11 @@ interface DropdownSelectorProps<T = string> {
   onFocusReturn?: () => void;
   visualFocusOnly?: boolean;
   triggerElementRef?: React.RefObject<HTMLElement>;
+  allowCustomValue?: boolean;
+  showBrowseOption?: boolean;
+  onBrowseFolder?: () => void;
+  customValueValidator?: (value: string) => boolean;
+  customValueLabel?: (value: string) => string;
 }
 
 export const DropdownSelector = forwardRef<HTMLDivElement, DropdownSelectorProps<any>>(
@@ -59,6 +64,11 @@ export const DropdownSelector = forwardRef<HTMLDivElement, DropdownSelectorProps
       onFocusReturn,
       visualFocusOnly = false,
       triggerElementRef,
+      allowCustomValue = false,
+      showBrowseOption = false,
+      onBrowseFolder,
+      customValueValidator,
+      customValueLabel = (value: string) => `Use custom: ${value}`,
     }: DropdownSelectorProps<T>,
     ref: React.ForwardedRef<HTMLDivElement>
   ) {
@@ -175,26 +185,63 @@ export const DropdownSelector = forwardRef<HTMLDivElement, DropdownSelectorProps
       return score;
     };
 
+    // Check if text looks like a directory path
+    const looksLikePath = (text: string): boolean => {
+      return text.includes('/') || text.includes('\\') || text.startsWith('~') || text.startsWith('.');
+    };
+
     // Filter and sort options
     const filteredOptions = (() => {
       const searchText = getFilterText();
-      if (!searchText.trim()) return options;
-      
       const predicate = filterPredicate || defaultFilterPredicate;
       
-      // Filter options
-      const filtered = options.filter(option => predicate(option, searchText));
+      // Filter options (or use all if no search text)
+      const filtered = searchText.trim() 
+        ? options.filter(option => predicate(option, searchText))
+        : options;
       
-      // Sort by match score if using default predicate
-      if (!filterPredicate) {
-        return filtered.sort((a, b) => {
+      // Sort by match score if using default predicate and there's search text
+      if (!filterPredicate && searchText.trim()) {
+        filtered.sort((a, b) => {
           const scoreA = calculateMatchScore(a.label, searchText);
           const scoreB = calculateMatchScore(b.label, searchText);
           return scoreA - scoreB;
         });
       }
       
-      return filtered;
+      // Add custom value option if enabled and no exact matches
+      const customOptions: DropdownOption<T>[] = [];
+      
+      if (allowCustomValue && searchText.trim()) {
+        const hasExactMatch = filtered.some(option => 
+          String(option.value).toLowerCase() === searchText.toLowerCase()
+        );
+        
+        if (!hasExactMatch && (looksLikePath(searchText) || !customValueValidator || customValueValidator(searchText))) {
+          customOptions.push({
+            value: searchText as T,
+            label: customValueLabel(searchText),
+            description: 'Custom directory path'
+          });
+        }
+      }
+      
+      // Add browse option if enabled
+      if (showBrowseOption && onBrowseFolder) {
+        const hasBrowseOption = filtered.some(option => 
+          String(option.label).includes('Browse')
+        );
+        
+        if (!hasBrowseOption) {
+          customOptions.push({
+            value: '__BROWSE__' as T,
+            label: '📂 Browse for folder...',
+            description: 'Open native folder selector'
+          });
+        }
+      }
+      
+      return [...customOptions, ...filtered];
     })();
 
     // Limit visible options based on maxVisibleItems
@@ -285,8 +332,13 @@ export const DropdownSelector = forwardRef<HTMLDivElement, DropdownSelectorProps
           if (focusedIndex >= 0 && focusedIndex < visibleOptions.length) {
             const option = visibleOptions[focusedIndex];
             if (!option.disabled) {
-              onChange(option.value);
-              setIsOpen(false);
+              if (String(option.value) === '__BROWSE__' && onBrowseFolder) {
+                onBrowseFolder();
+                setIsOpen(false);
+              } else {
+                onChange(option.value);
+                setIsOpen(false);
+              }
             }
           }
           break;
@@ -315,8 +367,13 @@ export const DropdownSelector = forwardRef<HTMLDivElement, DropdownSelectorProps
 
     const handleOptionClick = (option: DropdownOption<T>) => {
       if (!option.disabled) {
-        onChange(option.value);
-        setIsOpen(false);
+        if (String(option.value) === '__BROWSE__' && onBrowseFolder) {
+          onBrowseFolder();
+          setIsOpen(false);
+        } else {
+          onChange(option.value);
+          setIsOpen(false);
+        }
       }
     };
 

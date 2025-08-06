@@ -1,5 +1,6 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import * as os from 'os';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import ignore from 'ignore';
@@ -380,5 +381,153 @@ export class FileSystemService {
       this.logger.debug('Failed to get git HEAD', { dirPath, error });
       return null;
     }
+  }
+
+  /**
+   * Browse directories for directory picker (relaxed validation)
+   */
+  async browseDirectories(requestedPath: string): Promise<{
+    currentPath: string;
+    parentPath: string | null;
+    directories: Array<{ name: string; path: string }>;
+  }> {
+    this.logger.debug('Browse directories requested', { requestedPath });
+    
+    try {
+      // Expand home directory if needed
+      let normalizedPath = requestedPath;
+      if (requestedPath.startsWith('~')) {
+        normalizedPath = requestedPath.replace('~', os.homedir());
+      }
+      
+      // Validate path with relaxed rules for browsing
+      const safePath = await this.validatePathForBrowsing(normalizedPath);
+      
+      // Check if path exists and is a directory
+      const stats = await fs.stat(safePath);
+      if (!stats.isDirectory()) {
+        throw new CUIError('NOT_A_DIRECTORY', `Path is not a directory: ${requestedPath}`, 400);
+      }
+      
+      // Get directory entries
+      const dirents = await fs.readdir(safePath, { withFileTypes: true });
+      const directories: Array<{ name: string; path: string }> = [];
+      
+      // Filter for directories only
+      for (const dirent of dirents) {
+        if (dirent.isDirectory()) {
+          const fullPath = path.join(safePath, dirent.name);
+          directories.push({
+            name: dirent.name,
+            path: fullPath
+          });
+        }
+      }
+      
+      // Sort directories alphabetically
+      directories.sort((a, b) => a.name.localeCompare(b.name));
+      
+      // Get parent directory path
+      const parentPath = path.dirname(safePath);
+      const hasParent = parentPath !== safePath; // true unless we're at root
+      
+      this.logger.debug('Directories browsed successfully', { 
+        path: safePath, 
+        directoryCount: directories.length,
+        hasParent
+      });
+      
+      return {
+        currentPath: safePath,
+        parentPath: hasParent ? parentPath : null,
+        directories
+      };
+    } catch (error) {
+      if (error instanceof CUIError) {
+        throw error;
+      }
+      
+      const errorCode = (error as NodeJS.ErrnoException).code;
+      if (errorCode === 'ENOENT') {
+        throw new CUIError('PATH_NOT_FOUND', `Directory not found: ${requestedPath}`, 404);
+      } else if (errorCode === 'EACCES') {
+        throw new CUIError('ACCESS_DENIED', `Access denied to directory: ${requestedPath}`, 403);
+      }
+      
+      this.logger.error('Error browsing directories', error, { requestedPath });
+      throw new CUIError('BROWSE_DIRECTORIES_FAILED', `Failed to browse directories: ${error}`, 500);
+    }
+  }
+
+  /**
+   * Validate path for directory browsing (more permissive than general validation)
+   */
+  private async validatePathForBrowsing(requestedPath: string): Promise<string> {
+    // Require absolute paths
+    if (!path.isAbsolute(requestedPath)) {
+      throw new CUIError('INVALID_PATH', 'Path must be absolute', 400);
+    }
+    
+    // Check for path traversal attempts before normalization
+    if (requestedPath.includes('..')) {
+      this.logger.warn('Path traversal attempt detected in browse', { 
+        requestedPath 
+      });
+      throw new CUIError('PATH_TRAVERSAL_DETECTED', 'Invalid path: path traversal detected', 400);
+    }
+    
+    // Normalize the path
+    const normalizedPath = path.normalize(requestedPath);
+    
+    // Check against allowed base paths if configured (same as regular validation)
+    if (this.allowedBasePaths.length > 0) {
+      const isAllowed = this.allowedBasePaths.some(basePath => 
+        normalizedPath.startsWith(basePath)
+      );
+      
+      if (!isAllowed) {
+        this.logger.warn('Browse path outside allowed directories', { 
+          requestedPath, 
+          normalizedPath,
+          allowedBasePaths: this.allowedBasePaths 
+        });
+        throw new CUIError('PATH_NOT_ALLOWED', 'Path is outside allowed directories', 403);
+      }
+    }
+    
+    // Additional security checks (relaxed for browsing)
+    const segments = normalizedPath.split(path.sep);
+    
+    for (const segment of segments) {
+      if (!segment) continue;
+      
+      // Allow hidden directories for browsing (unlike regular validation)
+      // But still check for dangerous patterns
+      
+      // Check for null bytes
+      if (segment.includes('\u0000')) {
+        this.logger.warn('Null byte detected in browse path', { 
+          requestedPath, 
+          segment 
+        });
+        throw new CUIError('INVALID_PATH', 'Path contains null bytes', 400);
+      }
+      
+      // Check for invalid characters
+      if (/[<>:|?*]/.test(segment)) {
+        this.logger.warn('Invalid characters detected in browse path', { 
+          requestedPath, 
+          segment 
+        });
+        throw new CUIError('INVALID_PATH', 'Path contains invalid characters', 400);
+      }
+    }
+    
+    this.logger.debug('Browse path validated successfully', { 
+      requestedPath, 
+      normalizedPath 
+    });
+    
+    return normalizedPath;
   }
 }

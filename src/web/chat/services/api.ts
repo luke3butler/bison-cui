@@ -168,6 +168,17 @@ class ApiService {
     return this.apiCall(`/api/filesystem/list?${searchParams}`);
   }
 
+  async browseDirectories(path: string): Promise<{
+    currentPath: string;
+    parentPath: string | null;
+    directories: Array<{ name: string; path: string }>;
+  }> {
+    const searchParams = new URLSearchParams();
+    searchParams.append('path', path);
+    
+    return this.apiCall(`/api/filesystem/browse?${searchParams}`);
+  }
+
   async getCommands(workingDirectory?: string): Promise<CommandsResponse> {
     const searchParams = new URLSearchParams();
     if (workingDirectory) {

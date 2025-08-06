@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, forwardRef, useImperativeHandle } f
 import { ChevronDown, Mic, Send, Loader2, Sparkles, Laptop, Square, Check, X } from 'lucide-react';
 import { DropdownSelector, DropdownOption } from '../DropdownSelector';
 import { PermissionDialog } from '../PermissionDialog';
+import { DirectoryPicker } from '../DirectoryPicker';
 import type { PermissionRequest, Command } from '@/types';
 import { useLocalStorage } from '../../hooks/useLocalStorage';
 import styles from './Composer.module.css';
@@ -81,6 +82,7 @@ function DirectoryDropdown({
   onDirectorySelect 
 }: DirectoryDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [isPickerOpen, setIsPickerOpen] = useState(false);
 
   // Convert recentDirectories to sorted array and create options
   const options: DropdownOption<string>[] = Object.entries(recentDirectories)
@@ -99,42 +101,71 @@ function DirectoryDropdown({
     ? selectedDirectory
     : recentDirectories[selectedDirectory]?.shortname || selectedDirectory.split('/').pop() || selectedDirectory;
 
+  // Validate directory path (basic check for now)
+  const validateDirectory = (path: string): boolean => {
+    // Allow paths that start with / (absolute), ~ (home), or . (relative)
+    // Also allow paths that contain / or \ (directory separators)
+    return path.startsWith('/') || path.startsWith('~') || path.startsWith('.') || 
+           path.includes('/') || path.includes('\\');
+  };
+
+  // Handle opening directory picker modal
+  const handleBrowseFolder = () => {
+    setIsOpen(false); // Close dropdown
+    setIsPickerOpen(true); // Open modal
+  };
+
+  // Handle directory selection from modal
+  const handleDirectorySelected = (path: string) => {
+    onDirectorySelect(path);
+  };
+
   return (
-    <DropdownSelector
-      options={options}
-      value={selectedDirectory}
-      onChange={(value) => {
-        onDirectorySelect(value);
-        setIsOpen(false);
-      }}
-      isOpen={isOpen}
-      onOpenChange={setIsOpen}
-      placeholder="Enter a directory..."
-      showFilterInput={true}
-      filterPredicate={(option, searchText) => {
-        // Allow filtering by path
-        if (option.value.toLowerCase().includes(searchText.toLowerCase())) {
-          return true;
-        }
-        // If the search text looks like a path and doesn't match any existing option,
-        // the user can press Enter to add it as a new directory
-        return false;
-      }}
-      renderTrigger={({ onClick }) => (
-        <button
-          type="button"
-          className={styles.actionButton}
-          onClick={onClick}
-          aria-label="View all code environments"
-        >
-          <Laptop size={14} />
-          <span className={styles.buttonText}>
-            <span className={styles.buttonLabel}>{displayText}</span>
-          </span>
-          <ChevronDown size={14} />
-        </button>
-      )}
-    />
+    <>
+      <DropdownSelector
+        options={options}
+        value={selectedDirectory}
+        onChange={(value) => {
+          onDirectorySelect(value);
+          setIsOpen(false);
+        }}
+        isOpen={isOpen}
+        onOpenChange={setIsOpen}
+        placeholder="Enter a directory..."
+        showFilterInput={true}
+        allowCustomValue={true}
+        showBrowseOption={true}
+        onBrowseFolder={handleBrowseFolder}
+        customValueValidator={validateDirectory}
+        customValueLabel={(value) => `📁 Use directory: ${value}`}
+        filterPredicate={(option, searchText) => {
+          // Allow filtering by both path and shortname
+          return option.value.toLowerCase().includes(searchText.toLowerCase()) ||
+                 option.label.toLowerCase().includes(searchText.toLowerCase());
+        }}
+        renderTrigger={({ onClick }) => (
+          <button
+            type="button"
+            className={styles.actionButton}
+            onClick={onClick}
+            aria-label="View all code environments"
+          >
+            <Laptop size={14} />
+            <span className={styles.buttonText}>
+              <span className={styles.buttonLabel}>{displayText}</span>
+            </span>
+            <ChevronDown size={14} />
+          </button>
+        )}
+      />
+      
+      <DirectoryPicker
+        isOpen={isPickerOpen}
+        onClose={() => setIsPickerOpen(false)}
+        onSelect={handleDirectorySelected}
+        initialPath={selectedDirectory !== 'Select directory' ? selectedDirectory : undefined}
+      />
+    </>
   );
 }
 
