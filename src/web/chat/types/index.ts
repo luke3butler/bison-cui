@@ -84,6 +84,10 @@ export interface Preferences {
   colorScheme: 'light' | 'dark' | 'system';
   language: string;
   toolCollapseMode: CollapseMode;
+  notifications?: {
+    enabled: boolean;
+    ntfyUrl?: string;
+  };
 }
 
 // Tool result types

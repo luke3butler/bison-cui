@@ -1,10 +1,14 @@
 import React, { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
-import { ChevronDown, Mic, Send, Loader2, Sparkles, Laptop, Square, Check, X } from 'lucide-react';
+import { ChevronDown, Mic, Send, Loader2, Sparkles, Laptop, Square, Check, X, MicOff, Zap, Bot, Drone, Code2, Gauge, Rocket, FileText } from 'lucide-react';
 import { DropdownSelector, DropdownOption } from '../DropdownSelector';
 import { PermissionDialog } from '../PermissionDialog';
 import { DirectoryPicker } from '../DirectoryPicker';
+import { WaveformVisualizer } from '../WaveformVisualizer';
 import type { PermissionRequest, Command } from '@/types';
 import { useLocalStorage } from '../../hooks/useLocalStorage';
+import { useAudioRecording } from '../../hooks/useAudioRecording';
+import { useDirectoryPicker } from '../../hooks/useDirectoryPicker';
+import { api } from '../../../chat/services/api';
 import styles from './Composer.module.css';
 
 export interface FileSystemEntry {
@@ -82,7 +86,7 @@ function DirectoryDropdown({
   onDirectorySelect 
 }: DirectoryDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [isPickerOpen, setIsPickerOpen] = useState(false);
+  const { enhancedProps, pickerState } = useDirectoryPicker(onDirectorySelect, selectedDirectory);
 
   // Convert recentDirectories to sorted array and create options
   const options: DropdownOption<string>[] = Object.entries(recentDirectories)
@@ -101,25 +105,6 @@ function DirectoryDropdown({
     ? selectedDirectory
     : recentDirectories[selectedDirectory]?.shortname || selectedDirectory.split('/').pop() || selectedDirectory;
 
-  // Validate directory path (basic check for now)
-  const validateDirectory = (path: string): boolean => {
-    // Allow paths that start with / (absolute), ~ (home), or . (relative)
-    // Also allow paths that contain / or \ (directory separators)
-    return path.startsWith('/') || path.startsWith('~') || path.startsWith('.') || 
-           path.includes('/') || path.includes('\\');
-  };
-
-  // Handle opening directory picker modal
-  const handleBrowseFolder = () => {
-    setIsOpen(false); // Close dropdown
-    setIsPickerOpen(true); // Open modal
-  };
-
-  // Handle directory selection from modal
-  const handleDirectorySelected = (path: string) => {
-    onDirectorySelect(path);
-  };
-
   return (
     <>
       <DropdownSelector
@@ -133,15 +118,15 @@ function DirectoryDropdown({
         onOpenChange={setIsOpen}
         placeholder="Enter a directory..."
         showFilterInput={true}
-        allowCustomValue={true}
-        showBrowseOption={true}
-        onBrowseFolder={handleBrowseFolder}
-        customValueValidator={validateDirectory}
-        customValueLabel={(value) => `📁 Use directory: ${value}`}
+        {...enhancedProps}
         filterPredicate={(option, searchText) => {
-          // Allow filtering by both path and shortname
-          return option.value.toLowerCase().includes(searchText.toLowerCase()) ||
-                 option.label.toLowerCase().includes(searchText.toLowerCase());
+          // Allow filtering by path
+          if (option.value.toLowerCase().includes(searchText.toLowerCase())) {
+            return true;
+          }
+          // If the search text looks like a path and doesn't match any existing option,
+          // the user can press Enter to add it as a new directory
+          return false;
         }}
         renderTrigger={({ onClick }) => (
           <button
@@ -153,19 +138,89 @@ function DirectoryDropdown({
             <Laptop size={14} />
             <span className={styles.buttonText}>
               <span className={styles.buttonLabel}>{displayText}</span>
+              <ChevronDown size={14} />
             </span>
-            <ChevronDown size={14} />
           </button>
         )}
       />
-      
       <DirectoryPicker
-        isOpen={isPickerOpen}
-        onClose={() => setIsPickerOpen(false)}
-        onSelect={handleDirectorySelected}
+        isOpen={pickerState.isPickerOpen}
+        onClose={() => pickerState.setIsPickerOpen(false)}
+        onSelect={pickerState.handleDirectorySelected}
         initialPath={selectedDirectory !== 'Select directory' ? selectedDirectory : undefined}
       />
     </>
+  );
+}
+
+interface ModelDropdownProps {
+  selectedModel: string;
+  availableModels: string[];
+  onModelSelect: (model: string) => void;
+}
+
+function ModelDropdown({
+  selectedModel,
+  availableModels,
+  onModelSelect
+}: ModelDropdownProps) {
+  const [isOpen, setIsOpen] = useState(false);
+
+  // Get icon for model
+  const getModelIcon = (model: string) => {
+    switch (model) {
+      case 'sonnet':
+        return <Zap size={14} />;
+      case 'opus':
+        return <Drone size={14} />;
+      case 'default':
+        return <Bot size={14} />;
+      default:
+        return <Bot size={14} />;
+    }
+  };
+
+  // Create options from available models
+  const options: DropdownOption<string>[] = availableModels.map(model => ({
+    value: model,
+    label: model === 'default' ? 'Default' : model.charAt(0).toUpperCase() + model.slice(1),
+  }));
+
+  // Get display text for the selected model
+  const displayText = selectedModel === 'default' ? 'Default' : selectedModel.charAt(0).toUpperCase() + selectedModel.slice(1);
+
+  return (
+    <DropdownSelector
+      options={options}
+      value={selectedModel}
+      onChange={(value) => {
+        onModelSelect(value);
+        setIsOpen(false);
+      }}
+      isOpen={isOpen}
+      onOpenChange={setIsOpen}
+      showFilterInput={false}
+      renderOption={(option) => (
+        <div className={styles.modelOption}>
+          {getModelIcon(option.value)}
+          <span className={styles.modelOptionLabel}>{option.label}</span>
+        </div>
+      )}
+      renderTrigger={({ onClick }) => (
+        <button
+          type="button"
+          className={styles.actionButton}
+          onClick={onClick}
+          aria-label="Select AI model"
+        >
+          {getModelIcon(selectedModel)}
+          <span className={styles.buttonText}>
+            <span className={styles.buttonLabel}>{displayText}</span>
+            <ChevronDown size={14} />
+          </span>
+        </button>
+      )}
+    />
   );
 }
 
@@ -304,6 +359,18 @@ export const Composer = forwardRef<ComposerRef, ComposerProps>(function Composer
     type: 'file',
   });
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  
+  // Audio recording state
+  const { 
+    state: audioState, 
+    startRecording, 
+    stopRecording, 
+    resetToIdle,
+    error: audioError, 
+    duration: recordingDuration,
+    isSupported: isAudioSupported,
+    audioData
+  } = useAudioRecording();
 
   // Expose focusInput method via ref
   useImperativeHandle(ref, () => ({
@@ -485,21 +552,36 @@ export const Composer = forwardRef<ComposerRef, ComposerProps>(function Composer
 
   const getPermissionModeLabel = (mode: string): string => {
     switch (mode) {
-      case 'default': return 'Code';
+      case 'default': return 'Ask';
       case 'acceptEdits': return 'Auto';
       case 'bypassPermissions': return 'Yolo';
       case 'plan': return 'Plan';
-      default: return 'Code';
+      default: return 'Ask';
     }
   };
 
   const getPermissionModeTitle = (mode: string): string => {
     switch (mode) {
-      case 'default': return 'Code - Ask for permissions as needed';
+      case 'default': return 'Ask - Ask for permissions as needed';
       case 'acceptEdits': return 'Auto - Allow Claude to make changes directly';
       case 'bypassPermissions': return 'Yolo - Skip all permission prompts';
       case 'plan': return 'Plan - Create a plan without executing';
-      default: return 'Code - Ask for permissions as needed';
+      default: return 'Ask - Ask for permissions as needed';
+    }
+  };
+
+  const getPermissionModeIcon = (mode: string) => {
+    switch (mode) {
+      case 'default':
+        return <Code2 size={14} />;
+      case 'acceptEdits':
+        return <Gauge size={14} />;
+      case 'bypassPermissions':
+        return <Rocket size={14} />;
+      case 'plan':
+        return <FileText size={14} />;
+      default:
+        return <Code2 size={14} />;
     }
   };
 
@@ -510,7 +592,7 @@ export const Composer = forwardRef<ComposerRef, ComposerProps>(function Composer
     
     if (autocomplete.type === 'command') {
       // For commands, replace the entire trigger sequence (including the /) with the selected command
-      const newText = value.substring(0, autocomplete.triggerIndex) + selection + value.substring(cursorPos);
+      const newText = value.substring(0, autocomplete.triggerIndex) + selection + ' ' + value.substring(cursorPos);
       setValue(newText);
       
       // Reset autocomplete state immediately
@@ -519,7 +601,7 @@ export const Composer = forwardRef<ComposerRef, ComposerProps>(function Composer
       // Set cursor position after the inserted selection and adjust height
       setTimeout(() => {
         if (textareaRef.current) {
-          const newCursorPos = autocomplete.triggerIndex + selection.length;
+          const newCursorPos = autocomplete.triggerIndex + selection.length + 1;
           textareaRef.current.setSelectionRange(newCursorPos, newCursorPos);
           textareaRef.current.focus();
           adjustTextareaHeight();
@@ -527,7 +609,7 @@ export const Composer = forwardRef<ComposerRef, ComposerProps>(function Composer
       }, 0);
     } else {
       // For files, keep the existing behavior (append after the @ symbol)
-      const newText = value.substring(0, autocomplete.triggerIndex + 1) + selection + value.substring(cursorPos);
+      const newText = value.substring(0, autocomplete.triggerIndex + 1) + selection + ' ' + value.substring(cursorPos);
       setValue(newText);
       
       // Reset autocomplete state immediately
@@ -536,7 +618,7 @@ export const Composer = forwardRef<ComposerRef, ComposerProps>(function Composer
       // Set cursor position after the inserted selection and adjust height
       setTimeout(() => {
         if (textareaRef.current) {
-          const newCursorPos = autocomplete.triggerIndex + 1 + selection.length;
+          const newCursorPos = autocomplete.triggerIndex + 1 + selection.length + 1;
           textareaRef.current.setSelectionRange(newCursorPos, newCursorPos);
           textareaRef.current.focus();
           adjustTextareaHeight();
@@ -694,6 +776,70 @@ export const Composer = forwardRef<ComposerRef, ComposerProps>(function Composer
     onModelChange?.(model);
   };
 
+  // Audio recording handlers
+  const handleMicClick = async () => {
+    if (audioState === 'idle') {
+      await startRecording();
+    }
+  };
+
+  const handleAcceptRecording = async () => {
+    if (audioState === 'recording') {
+      const result = await stopRecording();
+      if (result) {
+        try {
+          const transcription = await api.transcribeAudio(result.audioBase64, result.mimeType);
+          
+          // Insert transcribed text at cursor position
+          if (textareaRef.current && transcription.text.trim()) {
+            const textarea = textareaRef.current;
+            const cursorPos = textarea.selectionStart;
+            const textBefore = value.substring(0, cursorPos);
+            const textAfter = value.substring(cursorPos);
+            const transcribedText = transcription.text.trim();
+            
+            // Add space before if needed
+            const needsSpaceBefore = textBefore.length > 0 && !textBefore.endsWith(' ') && !textBefore.endsWith('\n');
+            const finalText = (needsSpaceBefore ? ' ' : '') + transcribedText;
+            
+            const newText = textBefore + finalText + textAfter;
+            setValue(newText);
+            
+            // Set cursor position after inserted text
+            setTimeout(() => {
+              if (textareaRef.current) {
+                const newCursorPos = cursorPos + finalText.length;
+                textareaRef.current.setSelectionRange(newCursorPos, newCursorPos);
+                textareaRef.current.focus();
+                adjustTextareaHeight();
+              }
+            }, 0);
+          } else if (!transcription.text.trim()) {
+            console.warn('No speech detected in audio');
+            // Could show a toast message here
+          }
+        } catch (error) {
+          console.error('Transcription failed:', error);
+          // Could show an error toast here
+        } finally {
+          // Always reset to idle after transcription attempt
+          resetToIdle();
+        }
+      } else {
+        // If no result, also reset to idle
+        resetToIdle();
+      }
+    }
+  };
+
+  const handleRejectRecording = async () => {
+    if (audioState === 'recording' || audioState === 'processing') {
+      await stopRecording();
+      // Just stop and discard, no transcription
+      resetToIdle();
+    }
+  };
+
   return (
     <form className={styles.composer} onSubmit={(e) => {
       e.preventDefault();
@@ -713,19 +859,42 @@ export const Composer = forwardRef<ComposerRef, ComposerProps>(function Composer
       <div className={styles.container}>
         <div className={styles.inputWrapper}>
           <div className={styles.textAreaContainer}>
-            <textarea
-              ref={textareaRef}
-              className={styles.textarea}
-              placeholder={permissionRequest && showPermissionUI ? "Deny and tell Claude what to do" : placeholder}
-              value={value}
-              onChange={handleTextChange}
-              onKeyDown={handleKeyDown}
-              rows={1}
-              disabled={(isLoading || disabled) && !(permissionRequest && showPermissionUI)}
-            />
+            {audioState === 'recording' || audioState === 'processing' ? (
+              <div className={styles.waveformContainer}>
+                <WaveformVisualizer
+                  audioData={audioData}
+                  isRecording={audioState === 'recording'}
+                  isPaused={audioState === 'processing'}
+                />
+              </div>
+            ) : (
+              <textarea
+                ref={textareaRef}
+                className={styles.textarea}
+                placeholder={permissionRequest && showPermissionUI ? "Deny and tell Claude what to do" : placeholder}
+                value={value}
+                onChange={handleTextChange}
+                onKeyDown={handleKeyDown}
+                rows={1}
+                disabled={(isLoading || disabled) && !(permissionRequest && showPermissionUI)}
+              />
+            )}
+            
+            {/* Hidden textarea during processing for text insertion */}
+            {audioState === 'processing' && (
+              <textarea
+                ref={textareaRef}
+                className={styles.textarea}
+                style={{ position: 'absolute', opacity: 0, pointerEvents: 'none', top: '-9999px' }}
+                value={value}
+                onChange={handleTextChange}
+                rows={1}
+                disabled
+              />
+            )}
           </div>
 
-          {(showDirectorySelector || showModelSelector) && (
+          {(showDirectorySelector || showModelSelector) && audioState === 'idle' && (
             <div className={styles.footerActions}>
               <div className={styles.actionButtons}>
                 <div className={styles.actionGroup}>
@@ -740,23 +909,11 @@ export const Composer = forwardRef<ComposerRef, ComposerProps>(function Composer
 
                   {/* Model Selector */}
                   {showModelSelector && (
-                    <button
-                      type="button"
-                      className={styles.actionButton}
-                      aria-label="Select AI model"
-                      onClick={() => {
-                        // Toggle between models for now
-                        const currentIndex = availableModels.indexOf(selectedModel);
-                        const nextIndex = (currentIndex + 1) % availableModels.length;
-                        handleModelSelect(availableModels[nextIndex]);
-                      }}
-                    >
-                      <Sparkles size={14} />
-                      <span className={styles.buttonText}>
-                        <span className={styles.buttonLabel}>{selectedModel}</span>
-                      </span>
-                      <ChevronDown size={14} />
-                    </button>
+                    <ModelDropdown
+                      selectedModel={selectedModel}
+                      availableModels={availableModels}
+                      onModelSelect={handleModelSelect}
+                    />
                   )}
                 </div>
               </div>
@@ -764,7 +921,48 @@ export const Composer = forwardRef<ComposerRef, ComposerProps>(function Composer
           )}
 
           {/* Dynamic Action Button */}
-          <div className={styles.voiceButton}>
+          <div className={styles.actionGroupRight}>
+            {audioState === 'recording' || audioState === 'processing' ? (
+              /* Recording/Processing State: Show tick and cross */
+              <div className={styles.recordingControls}>
+                <button
+                  type="button"
+                  className={styles.recordingButton}
+                  onClick={handleAcceptRecording}
+                  disabled={audioState === 'processing'}
+                  title={audioState === 'processing' ? 'Processing...' : 'Accept recording'}
+                >
+                  {audioState === 'processing' ? (
+                    <Loader2 size={16} className={styles.spinning} />
+                  ) : (
+                    <Check size={16} />
+                  )}
+                </button>
+                <button
+                  type="button"
+                  className={styles.recordingButton}
+                  onClick={handleRejectRecording}
+                  disabled={audioState === 'processing'}
+                  title="Discard recording"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            ) : (
+              /* Idle State: Show mic button */
+              isAudioSupported && (
+                <button
+                  type="button"
+                  className={`${styles.actionButton} ${audioError ? styles.micError : ''}`}
+                  onClick={handleMicClick}
+                  disabled={disabled}
+                  title={audioError ? `Error: ${audioError}` : 'Start voice recording'}
+                >
+                  {audioError ? <MicOff size={16} /> : <Mic size={16} />}
+                </button>
+              )
+            )}
+            
             {permissionRequest && showPermissionUI ? (
               <div className={styles.permissionButtons}>
                 <button
@@ -801,7 +999,7 @@ export const Composer = forwardRef<ComposerRef, ComposerProps>(function Composer
               >
                 <Square size={18} />
               </button>
-            ) : (
+            ) : audioState === 'idle' && (
               <div className={styles.permissionModeButtons}>
                 {/* Combined Permission Mode Button with Dropdown */}
                 <div className={styles.combinedPermissionButton}>
@@ -813,12 +1011,16 @@ export const Composer = forwardRef<ComposerRef, ComposerProps>(function Composer
                     onClick={() => handleSubmit(selectedPermissionMode)}
                   >
                     <div className={styles.btnContent}>
-                      {isLoading ? <Loader2 size={14} className={styles.spinning} /> : getPermissionModeLabel(selectedPermissionMode)}
+                      {isLoading ? <Loader2 size={14} className={styles.spinning} /> : (
+                        <>
+                          {getPermissionModeLabel(selectedPermissionMode)}
+                        </>
+                      )}
                     </div>
                   </button>
                   <DropdownSelector
                     options={[
-                      { value: 'default', label: 'Code', description: 'Ask before making changes' },
+                      { value: 'default', label: 'Ask', description: 'Ask before making changes' },
                       { value: 'acceptEdits', label: 'Auto', description: 'Apply edits automatically' },
                       { value: 'bypassPermissions', label: 'Yolo', description: 'No permission prompts' },
                       { value: 'plan', label: 'Plan', description: 'Planning mode only' },
@@ -830,7 +1032,10 @@ export const Composer = forwardRef<ComposerRef, ComposerProps>(function Composer
                     showFilterInput={false}
                     renderOption={(option) => (
                       <div className={styles.permissionOption}>
-                        <span className={styles.permissionOptionLabel}>{option.label}</span>
+                        <div className={styles.permissionOptionHeader}>
+                          {getPermissionModeIcon(option.value)}
+                          <span className={styles.permissionOptionLabel}>{option.label}</span>
+                        </div>
                         {option.description && (
                           <span className={styles.permissionOptionDescription}>{option.description}</span>
                         )}
@@ -844,9 +1049,7 @@ export const Composer = forwardRef<ComposerRef, ComposerProps>(function Composer
                         disabled={!value.trim() || isLoading || disabled || (showDirectorySelector && selectedDirectory === 'Select directory')}
                         aria-label="Select permission mode"
                       >
-                        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                          <path d="M4.5 5.5L8 9L11.5 5.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
-                        </svg>
+                        <ChevronDown size={14} />
                       </button>
                     )}
                   />

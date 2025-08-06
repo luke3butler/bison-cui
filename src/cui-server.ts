@@ -12,6 +12,8 @@ import { PreferencesService } from './services/preferences-service';
 import { ConversationStatusManager } from './services/conversation-status-manager';
 import { WorkingDirectoriesService } from './services/working-directories-service';
 import { ToolMetricsService } from './services/ToolMetricsService';
+import { NotificationService } from './services/notification-service';
+import { geminiService } from './services/gemini-service';
 import { 
   StreamEvent,
   CUIError,
@@ -26,6 +28,7 @@ import { createLogRoutes } from './routes/log.routes';
 import { createStreamingRoutes } from './routes/streaming.routes';
 import { createWorkingDirectoriesRoutes } from './routes/working-directories.routes';
 import { createPreferencesRoutes } from './routes/preferences.routes';
+import { createGeminiRoutes } from './routes/gemini.routes';
 import { errorHandler } from './middleware/error-handler';
 import { requestLogger } from './middleware/request-logger';
 import { createCorsMiddleware } from './middleware/cors-setup';
@@ -57,6 +60,7 @@ export class CUIServer {
   private conversationStatusManager: ConversationStatusManager;
   private workingDirectoriesService: WorkingDirectoriesService;
   private toolMetricsService: ToolMetricsService;
+  private notificationService: NotificationService;
   private logger: Logger;
   private port: number;
   private host: string;
@@ -98,6 +102,14 @@ export class CUIServer {
     this.permissionTracker = new PermissionTracker();
     this.mcpConfigGenerator = new MCPConfigGenerator();
     this.workingDirectoriesService = new WorkingDirectoriesService(this.historyReader, this.logger);
+    this.notificationService = new NotificationService(this.preferencesService);
+    
+    // Wire up notification service
+    this.processManager.setNotificationService(this.notificationService);
+    this.permissionTracker.setNotificationService(this.notificationService);
+    this.permissionTracker.setConversationStatusManager(this.conversationStatusManager);
+    this.permissionTracker.setHistoryReader(this.historyReader);
+    
     this.logger.debug('Services initialized successfully');
     
     this.setupMiddleware();
@@ -108,10 +120,31 @@ export class CUIServer {
   }
 
   /**
-   * Start the server
+   * Get the Express app instance
    */
-  async start(): Promise<void> {
-    this.logger.debug('Start method called');
+  getApp(): Express {
+    return this.app;
+  }
+
+  /**
+   * Get the configured port
+   */
+  getPort(): number {
+    return this.port;
+  }
+
+  /**
+   * Get the configured host
+   */
+  getHost(): string {
+    return this.host;
+  }
+
+  /**
+   * Initialize services without starting the HTTP server
+   */
+  async initialize(): Promise<void> {
+    this.logger.debug('Initialize method called');
     try {
       // Initialize configuration first
       this.logger.debug('Initializing configuration');
@@ -127,6 +160,9 @@ export class CUIServer {
       await this.preferencesService.initialize();
       this.logger.debug('Preferences service initialized successfully');
 
+      this.logger.debug('Initializing Gemini service');
+      await geminiService.initialize();
+      this.logger.debug('Gemini service initialized successfully');
       
       // Apply overrides if provided (for tests and CLI options)
       this.port = this.configOverrides?.port ?? config.server.port;
@@ -148,6 +184,37 @@ export class CUIServer {
       const mcpConfigPath = this.mcpConfigGenerator.generateConfig(this.port);
       this.processManager.setMCPConfigPath(mcpConfigPath);
       this.logger.debug('MCP config generated and set', { path: mcpConfigPath });
+      
+      // Display auth URL with token fragment
+      const authToken = this.configOverrides?.token ?? config.authToken;
+      const authUrl = `http://${this.host}:${this.port}#token=${authToken}`;
+      if (!this.configOverrides?.skipAuthToken) {
+        this.logger.info(`Access with auth token: ${authUrl}`);
+      } else {
+        this.logger.info('Authentication is disabled (--skip-auth-token)');
+      }
+    } catch (error) {
+      this.logger.error('Failed to initialize server:', error, {
+        errorType: error instanceof Error ? error.constructor.name : typeof error,
+        errorMessage: error instanceof Error ? error.message : String(error)
+      });
+      
+      if (error instanceof CUIError) {
+        throw error;
+      } else {
+        throw new CUIError('SERVER_INIT_FAILED', `Server initialization failed: ${error}`, 500);
+      }
+    }
+  }
+
+  /**
+   * Start the server
+   */
+  async start(): Promise<void> {
+    this.logger.debug('Start method called');
+    try {
+      // Initialize all services
+      await this.initialize();
 
       // Start Express server
       const isDev = process.env.NODE_ENV === 'development';
@@ -206,15 +273,8 @@ export class CUIServer {
           });
         }
       });
-      // Display auth URL with token fragment
-      const authToken = this.configOverrides?.token ?? config.authToken;
-      const authUrl = `http://${this.host}:${this.port}#token=${authToken}`;
+      
       this.logger.info(`cui server started on http://${this.host}:${this.port}`);
-      if (!this.configOverrides?.skipAuthToken) {
-        this.logger.info(`Access with auth token: ${authUrl}`);
-      } else {
-        this.logger.info('Authentication is disabled (--skip-auth-token)');
-      }
     } catch (error) {
       this.logger.error('Failed to start server:', error, {
         errorType: error instanceof Error ? error.constructor.name : typeof error,
@@ -324,7 +384,7 @@ export class CUIServer {
 
   private setupMiddleware(): void {
     this.app.use(createCorsMiddleware());
-    this.app.use(express.json());
+    this.app.use(express.json({ limit: '10mb' }));
     
     // Static file serving
     const isDev = process.env.NODE_ENV === 'development';
@@ -349,6 +409,9 @@ export class CUIServer {
     this.app.use('/api/system', createSystemRoutes(this.processManager, this.historyReader));
     this.app.use('/', createSystemRoutes(this.processManager, this.historyReader)); // For /health at root
     
+    // Permission routes - before auth (needed for MCP server communication)
+    this.app.use('/api/permissions', createPermissionRoutes(this.permissionTracker));
+    
     // Apply auth middleware to all other API routes unless skipAuthToken is set
     if (!this.configOverrides?.skipAuthToken) {
       if (this.configOverrides?.token) {
@@ -372,13 +435,12 @@ export class CUIServer {
       this.conversationStatusManager,
       this.toolMetricsService
     ));
-    
-    this.app.use('/api/permissions', createPermissionRoutes(this.permissionTracker));
     this.app.use('/api/filesystem', createFileSystemRoutes(this.fileSystemService));
     this.app.use('/api/logs', createLogRoutes());
     this.app.use('/api/stream', createStreamingRoutes(this.streamManager));
     this.app.use('/api/working-directories', createWorkingDirectoriesRoutes(this.workingDirectoriesService));
     this.app.use('/api/preferences', createPreferencesRoutes(this.preferencesService));
+    this.app.use('/api/gemini', createGeminiRoutes(geminiService));
     
     // React Router catch-all - must be after all API routes
     const isDev = process.env.NODE_ENV === 'development';

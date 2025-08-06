@@ -11,7 +11,7 @@ import type {
   FileSystemListQuery,
   FileSystemListResponse,
 } from '../types';
-import type { CommandsResponse } from '@/types';
+import type { CommandsResponse, GeminiHealthResponse } from '@/types';
 import { getAuthToken } from '../../hooks/useAuth';
 
 class ApiService {
@@ -212,6 +212,20 @@ class ApiService {
     return this.apiCall('/api/conversations/archive-all', {
       method: 'POST',
     });
+  }
+
+  async transcribeAudio(audioBase64: string, mimeType: string): Promise<{ text: string }> {
+    return this.apiCall('/api/gemini/transcribe', {
+      method: 'POST',
+      body: JSON.stringify({
+        audio: audioBase64,
+        mimeType: mimeType
+      }),
+    });
+  }
+
+  async getGeminiHealth(): Promise<GeminiHealthResponse> {
+    return this.apiCall<GeminiHealthResponse>('/api/gemini/health');
   }
 
   // For endpoints that need direct fetch with auth (like SSE streams)

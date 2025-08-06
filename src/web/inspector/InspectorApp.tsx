@@ -16,6 +16,7 @@ function InspectorApp() {
   const [availableSessions, setAvailableSessions] = useState<any[]>([]);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({
     status: true,
+    preferences: true,
     start: true,
     stop: true,
     list: true,
@@ -27,6 +28,9 @@ function InspectorApp() {
     workingDirs: true,
     commands: true,
     bulkOperations: true,
+    geminiHealth: true,
+    geminiTranscribe: true,
+    geminiSummarize: true,
   });
 
   // Form states
@@ -77,6 +81,18 @@ function InspectorApp() {
   
   // Commands state
   const [commandsWorkingDirectory, setCommandsWorkingDirectory] = useState('');
+  
+  // Preferences state
+  const [preferencesColorScheme, setPreferencesColorScheme] = useState('system');
+  const [preferencesLanguage, setPreferencesLanguage] = useState('en');
+  const [preferencesNotificationsEnabled, setPreferencesNotificationsEnabled] = useState(false);
+  const [preferencesNtfyUrl, setPreferencesNtfyUrl] = useState('https://ntfy.sh');
+  
+  // Gemini API states
+  const [geminiAudioFile, setGeminiAudioFile] = useState<File | null>(null);
+  const [geminiAudioBase64, setGeminiAudioBase64] = useState('');
+  const [geminiMimeType, setGeminiMimeType] = useState('audio/wav');
+  const [geminiTextToSummarize, setGeminiTextToSummarize] = useState('');
 
   const streamResultRef = useRef<HTMLDivElement>(null);
 
@@ -115,6 +131,39 @@ function InspectorApp() {
       showJson('commandsResult', data);
     } catch (e: any) {
       showJson('commandsResult', { error: e.message });
+    }
+  };
+
+  const getPreferences = async () => {
+    try {
+      const data = await api.getPreferences();
+      showJson('preferencesGetResult', data);
+      
+      // Update form fields with current values
+      setPreferencesColorScheme(data.colorScheme);
+      setPreferencesLanguage(data.language);
+      setPreferencesNotificationsEnabled(data.notifications?.enabled ?? false);
+      setPreferencesNtfyUrl(data.notifications?.ntfyUrl ?? 'https://ntfy.sh');
+    } catch (e: any) {
+      showJson('preferencesGetResult', { error: e.message });
+    }
+  };
+
+  const updatePreferences = async () => {
+    try {
+      const updates: any = {
+        colorScheme: preferencesColorScheme as 'light' | 'dark' | 'system',
+        language: preferencesLanguage,
+        notifications: {
+          enabled: preferencesNotificationsEnabled,
+          ntfyUrl: preferencesNtfyUrl
+        }
+      };
+
+      const data = await api.updatePreferences(updates);
+      showJson('preferencesUpdateResult', data);
+    } catch (e: any) {
+      showJson('preferencesUpdateResult', { error: e.message });
     }
   };
 
@@ -386,6 +435,83 @@ function InspectorApp() {
     }
   };
 
+  const getGeminiHealth = async () => {
+    try {
+      const response = await api.fetchWithAuth('/api/gemini/health');
+      const data = await response.json();
+      showJson('geminiHealthResult', data);
+    } catch (e: any) {
+      showJson('geminiHealthResult', { error: e.message });
+    }
+  };
+
+  const transcribeAudio = async () => {
+    try {
+      let body: any = {};
+      
+      if (geminiAudioFile) {
+        // Use file upload
+        const formData = new FormData();
+        formData.append('audio', geminiAudioFile);
+        
+        const response = await api.fetchWithAuth('/api/gemini/transcribe', {
+          method: 'POST',
+          body: formData
+        });
+        const data = await response.json();
+        showJson('geminiTranscribeResult', data);
+      } else if (geminiAudioBase64) {
+        // Use base64
+        const response = await api.fetchWithAuth('/api/gemini/transcribe', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            audio: geminiAudioBase64,
+            mimeType: geminiMimeType
+          })
+        });
+        const data = await response.json();
+        showJson('geminiTranscribeResult', data);
+      } else {
+        showJson('geminiTranscribeResult', { error: 'Please provide an audio file or base64 data' });
+      }
+    } catch (e: any) {
+      showJson('geminiTranscribeResult', { error: e.message });
+    }
+  };
+
+  const summarizeText = async () => {
+    try {
+      if (!geminiTextToSummarize) {
+        showJson('geminiSummarizeResult', { error: 'Please provide text to summarize' });
+        return;
+      }
+
+      const response = await api.fetchWithAuth('/api/gemini/summarize', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          text: geminiTextToSummarize
+        })
+      });
+      const data = await response.json();
+      showJson('geminiSummarizeResult', data);
+    } catch (e: any) {
+      showJson('geminiSummarizeResult', { error: e.message });
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setGeminiAudioFile(e.target.files[0]);
+      setGeminiAudioBase64(''); // Clear base64 when file is selected
+    }
+  };
+
   const copyJsonToClipboard = async (data: any, buttonRef: HTMLButtonElement) => {
     try {
       const jsonString = JSON.stringify(data, null, 2);
@@ -450,6 +576,75 @@ function InspectorApp() {
             <button onClick={getSystemStatus}>Get Status</button>
             <div id="statusResult" className={styles.jsonViewerContainer}>
               {results.statusResult && <JsonViewer data={results.statusResult} resultId="statusResult" />}
+            </div>
+            {results.statusResult && !results.statusResult.error && (
+              <div style={{ marginTop: '10px', fontSize: '12px', color: '#666' }}>
+                <div><strong>Claude Version:</strong> {results.statusResult.claudeVersion}</div>
+                <div><strong>Claude Path:</strong> {results.statusResult.claudePath}</div>
+                <div><strong>Config Path:</strong> {results.statusResult.configPath}</div>
+                <div><strong>Active Conversations:</strong> {results.statusResult.activeConversations}</div>
+                <div><strong>Machine ID:</strong> {results.statusResult.machineId}</div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Preferences */}
+        <div className={styles.section}>
+          <div className={`${styles.endpoint} ${styles.collapsible} ${collapsed.preferences ? styles.collapsed : ''}`} onClick={() => toggleCollapse('preferences')}>
+            GET/PUT /api/preferences
+          </div>
+          <div className={styles.collapsibleContent}>
+            <button onClick={getPreferences}>Get Preferences</button>
+            <div id="preferencesGetResult" className={styles.jsonViewerContainer}>
+              {results.preferencesGetResult && <JsonViewer data={results.preferencesGetResult} resultId="preferencesGetResult" />}
+            </div>
+            
+            <div style={{ marginTop: '15px', borderTop: '1px solid #333', paddingTop: '15px' }}>
+              <h4 style={{ margin: '0 0 10px 0', fontSize: '14px' }}>Update Preferences</h4>
+              
+              <div className={styles.fieldGroup}>
+                <div className={styles.fieldLabel}>Color Scheme</div>
+                <select value={preferencesColorScheme} onChange={(e) => setPreferencesColorScheme(e.target.value)}>
+                  <option value="system">System</option>
+                  <option value="light">Light</option>
+                  <option value="dark">Dark</option>
+                </select>
+              </div>
+              
+              <div className={styles.fieldGroup}>
+                <div className={styles.fieldLabel}>Language</div>
+                <input type="text" value={preferencesLanguage} onChange={(e) => setPreferencesLanguage(e.target.value)} placeholder="en" />
+              </div>
+              
+              <div className={styles.fieldGroup}>
+                <div className={styles.inlineFields}>
+                  <div>
+                    <input 
+                      type="checkbox" 
+                      id="notificationsEnabled" 
+                      checked={preferencesNotificationsEnabled} 
+                      onChange={(e) => setPreferencesNotificationsEnabled(e.target.checked)} 
+                    />
+                    <label htmlFor="notificationsEnabled">Enable Notifications</label>
+                  </div>
+                </div>
+              </div>
+              
+              <div className={styles.fieldGroup}>
+                <div className={styles.fieldLabel}>Ntfy URL <span className={styles.optional}>(optional)</span></div>
+                <input 
+                  type="text" 
+                  value={preferencesNtfyUrl} 
+                  onChange={(e) => setPreferencesNtfyUrl(e.target.value)} 
+                  placeholder="https://ntfy.sh" 
+                />
+              </div>
+              
+              <button onClick={updatePreferences}>Update Preferences</button>
+              <div id="preferencesUpdateResult" className={styles.jsonViewerContainer}>
+                {results.preferencesUpdateResult && <JsonViewer data={results.preferencesUpdateResult} resultId="preferencesUpdateResult" />}
+              </div>
             </div>
           </div>
         </div>
@@ -800,6 +995,88 @@ function InspectorApp() {
               <div id="archiveAllResult" className={styles.jsonViewerContainer}>
                 {results.archiveAllResult && <JsonViewer data={results.archiveAllResult} resultId="archiveAllResult" />}
               </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Gemini Health Check */}
+        <div className={styles.section}>
+          <div className={`${styles.endpoint} ${styles.collapsible} ${collapsed.geminiHealth ? styles.collapsed : ''}`} onClick={() => toggleCollapse('geminiHealth')}>
+            GET /api/gemini/health
+          </div>
+          <div className={styles.collapsibleContent}>
+            <button onClick={getGeminiHealth}>Check Gemini Health</button>
+            <div id="geminiHealthResult" className={styles.jsonViewerContainer}>
+              {results.geminiHealthResult && <JsonViewer data={results.geminiHealthResult} resultId="geminiHealthResult" />}
+            </div>
+          </div>
+        </div>
+
+        {/* Gemini Transcribe */}
+        <div className={styles.section}>
+          <div className={`${styles.endpoint} ${styles.collapsible} ${collapsed.geminiTranscribe ? styles.collapsed : ''}`} onClick={() => toggleCollapse('geminiTranscribe')}>
+            POST /api/gemini/transcribe
+          </div>
+          <div className={styles.collapsibleContent}>
+            <div className={styles.fieldGroup}>
+              <div className={styles.fieldLabel}>Audio File Upload</div>
+              <input type="file" accept="audio/*" onChange={handleFileChange} />
+              {geminiAudioFile && <div style={{ fontSize: '12px', color: '#666', marginTop: '2px' }}>Selected: {geminiAudioFile.name}</div>}
+            </div>
+            <div style={{ margin: '10px 0', textAlign: 'center' }}>
+              <span style={{ color: '#666' }}>— OR —</span>
+            </div>
+            <div className={styles.fieldGroup}>
+              <div className={styles.fieldLabel}>Base64 Audio Data</div>
+              <textarea 
+                value={geminiAudioBase64} 
+                onChange={(e) => {
+                  setGeminiAudioBase64(e.target.value);
+                  setGeminiAudioFile(null); // Clear file when base64 is entered
+                }} 
+                rows={4} 
+                placeholder="Base64 encoded audio data..."
+                style={{ fontFamily: 'monospace', fontSize: '12px' }}
+              />
+            </div>
+            <div className={styles.fieldGroup}>
+              <div className={styles.fieldLabel}>MIME Type <span className={styles.optional}>(for base64)</span></div>
+              <select value={geminiMimeType} onChange={(e) => setGeminiMimeType(e.target.value)}>
+                <option value="audio/wav">audio/wav</option>
+                <option value="audio/mp3">audio/mp3</option>
+                <option value="audio/mpeg">audio/mpeg</option>
+                <option value="audio/ogg">audio/ogg</option>
+                <option value="audio/webm">audio/webm</option>
+              </select>
+            </div>
+            <button onClick={transcribeAudio}>Transcribe Audio</button>
+            <div id="geminiTranscribeResult" className={styles.jsonViewerContainer}>
+              {results.geminiTranscribeResult && <JsonViewer data={results.geminiTranscribeResult} resultId="geminiTranscribeResult" />}
+            </div>
+          </div>
+        </div>
+
+        {/* Gemini Summarize */}
+        <div className={styles.section}>
+          <div className={`${styles.endpoint} ${styles.collapsible} ${collapsed.geminiSummarize ? styles.collapsed : ''}`} onClick={() => toggleCollapse('geminiSummarize')}>
+            POST /api/gemini/summarize
+          </div>
+          <div className={styles.collapsibleContent}>
+            <div className={styles.fieldGroup}>
+              <div className={styles.fieldLabel}>Text to Summarize <span style={{ color: 'red' }}>*</span></div>
+              <textarea 
+                value={geminiTextToSummarize} 
+                onChange={(e) => setGeminiTextToSummarize(e.target.value)} 
+                rows={8} 
+                placeholder="Enter text to summarize..."
+              />
+              <div style={{ fontSize: '12px', color: '#666', marginTop: '2px' }}>
+                {geminiTextToSummarize.length} characters
+              </div>
+            </div>
+            <button onClick={summarizeText}>Summarize Text</button>
+            <div id="geminiSummarizeResult" className={styles.jsonViewerContainer}>
+              {results.geminiSummarizeResult && <JsonViewer data={results.geminiSummarizeResult} resultId="geminiSummarizeResult" />}
             </div>
           </div>
         </div>

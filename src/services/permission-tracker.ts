@@ -2,15 +2,42 @@ import { EventEmitter } from 'events';
 import { v4 as uuidv4 } from 'uuid';
 import { PermissionRequest } from '@/types';
 import { logger } from '@/services/logger';
+import { NotificationService } from './notification-service';
+import { ConversationStatusManager } from './conversation-status-manager';
+import { ClaudeHistoryReader } from './claude-history-reader';
 
 /**
  * Service to track permission requests from Claude CLI via MCP
  */
 export class PermissionTracker extends EventEmitter {
   private permissionRequests: Map<string, PermissionRequest> = new Map();
+  private notificationService?: NotificationService;
+  private conversationStatusManager?: ConversationStatusManager;
+  private historyReader?: ClaudeHistoryReader;
 
   constructor() {
     super();
+  }
+
+  /**
+   * Set the notification service
+   */
+  setNotificationService(service: NotificationService): void {
+    this.notificationService = service;
+  }
+
+  /**
+   * Set the conversation status manager
+   */
+  setConversationStatusManager(manager: ConversationStatusManager): void {
+    this.conversationStatusManager = manager;
+  }
+
+  /**
+   * Set the history reader
+   */
+  setHistoryReader(reader: ClaudeHistoryReader): void {
+    this.historyReader = reader;
   }
 
   /**
@@ -32,6 +59,40 @@ export class PermissionTracker extends EventEmitter {
 
     // Emit event for new permission request
     this.emit('permission_request', request);
+
+    // Send notification if services are available
+    if (this.notificationService && this.conversationStatusManager && this.historyReader) {
+      // Get session ID from streaming ID
+      const sessionId = this.conversationStatusManager.getSessionId(streamingId || '');
+      
+      if (sessionId) {
+        // Try to get conversation summary
+        this.historyReader.getConversationMetadata(sessionId)
+          .then(metadata => {
+            if (this.notificationService) {
+              return this.notificationService.sendPermissionNotification(
+                request, 
+                sessionId, 
+                metadata?.summary
+              );
+            }
+          })
+          .catch(error => {
+            logger.error('Failed to fetch conversation metadata for notification', error);
+            // Fall back to sending without summary
+            if (this.notificationService) {
+              this.notificationService.sendPermissionNotification(request, sessionId)
+                .catch(err => logger.error('Failed to send permission notification', err));
+            }
+          });
+      } else {
+        // No session ID available, send without session info
+        this.notificationService.sendPermissionNotification(request)
+          .catch(error => {
+            logger.error('Failed to send permission notification', error);
+          });
+      }
+    }
 
     return request;
   }

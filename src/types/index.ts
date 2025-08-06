@@ -177,6 +177,7 @@ export interface SystemStatusResponse {
   claudePath: string;
   configPath: string;
   activeConversations: number;
+  machineId: string;
 }
 
 // Stream event types
@@ -281,6 +282,17 @@ export interface SessionUpdateResponse {
   updatedFields: SessionInfo;    // Returns the complete updated session info
 }
 
+// Notification types
+export interface Notification {
+  title: string;
+  message: string;
+  priority: 'min' | 'low' | 'default' | 'high' | 'urgent';
+  tags: string[];
+  sessionId: string;
+  streamingId: string;
+  permissionRequestId?: string;
+}
+
 // Working directories API types
 export interface WorkingDirectory {
   path: string;              // Full absolute path (e.g., "/home/user/projects/myapp")
@@ -306,3 +318,28 @@ export interface CommandsResponse {
 }
 
 export * from './preferences';
+
+// Gemini API types
+export interface GeminiHealthResponse {
+  status: 'healthy' | 'unhealthy';
+  message: string;
+  apiKeyValid: boolean;
+}
+
+export interface GeminiTranscribeRequest {
+  audio: string; // base64 encoded audio
+  mimeType: string; // audio mime type
+}
+
+export interface GeminiTranscribeResponse {
+  text: string;
+}
+
+export interface GeminiSummarizeRequest {
+  text: string;
+}
+
+export interface GeminiSummarizeResponse {
+  title: string;
+  keypoints: string[];
+}

@@ -5,6 +5,7 @@ import { ClaudeProcessManager } from '@/services/claude-process-manager';
 import { ClaudeHistoryReader } from '@/services/claude-history-reader';
 import { createLogger, type Logger } from '@/services/logger';
 import { getAvailableCommands } from '@/services/commands-service';
+import { ConfigService } from '@/services/config-service';
 import { execSync } from 'child_process';
 
 export function createSystemRoutes(
@@ -107,11 +108,17 @@ async function getSystemStatus(
       });
     }
     
+    // Get machine ID from config
+    const configService = ConfigService.getInstance();
+    const config = configService.getConfig();
+    const machineId = config.machine_id;
+    
     return {
       claudeVersion,
       claudePath,
       configPath: historyReader.homePath,
-      activeConversations: processManager.getActiveSessions().length
+      activeConversations: processManager.getActiveSessions().length,
+      machineId
     };
   } catch (_error) {
     throw new CUIError('SYSTEM_STATUS_ERROR', 'Failed to get system status', 500);

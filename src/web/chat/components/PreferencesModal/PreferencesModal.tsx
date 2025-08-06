@@ -1,15 +1,16 @@
 import React, { useEffect, useState } from 'react';
-import { Settings, Bell, Shield } from 'lucide-react';
+import { Settings, Bell, Shield, Mic } from 'lucide-react';
 import styles from './PreferencesModal.module.css';
 import { api } from '../../services/api';
 import type { Preferences } from '@/types/preferences';
+import type { GeminiHealthResponse } from '@/types';
 import { Dialog } from '../Dialog';
 
 interface Props {
   onClose: () => void;
 }
 
-type TabId = 'general' | 'notifications' | 'dataControls';
+type TabId = 'general' | 'notifications' | 'dataControls' | 'voiceInput';
 
 interface Tab {
   id: TabId;
@@ -21,20 +22,23 @@ const tabs: Tab[] = [
   { id: 'general', label: 'General', icon: <Settings size={18} /> },
   { id: 'notifications', label: 'Notifications', icon: <Bell size={18} /> },
   { id: 'dataControls', label: 'Data controls', icon: <Shield size={18} /> },
+  { id: 'voiceInput', label: 'Voice Input', icon: <Mic size={18} /> },
 ];
 
 export function PreferencesModal({ onClose }: Props) {
   const [prefs, setPrefs] = useState<Preferences>({ 
     colorScheme: 'system', 
-    language: 'auto-detect',
-    notificationsEnabled: false,
-    pushSubscriptions: []
+    language: 'auto-detect'
   });
   const [activeTab, setActiveTab] = useState<TabId>('general');
   const [archiveStatus, setArchiveStatus] = useState<string>('');
+  const [machineId, setMachineId] = useState<string>('');
+  const [geminiHealth, setGeminiHealth] = useState<GeminiHealthResponse | null>(null);
+  const [geminiHealthLoading, setGeminiHealthLoading] = useState(false);
 
   useEffect(() => {
     api.getPreferences().then(setPrefs).catch(() => {});
+    api.getSystemStatus().then(status => setMachineId(status.machineId)).catch(() => {});
   }, []);
 
 
@@ -52,17 +56,15 @@ export function PreferencesModal({ onClose }: Props) {
     }
   };
 
-  const handleNotificationToggle = async (enabled: boolean) => {
+  const handleCheckGeminiHealth = async () => {
+    setGeminiHealthLoading(true);
     try {
-      if (enabled) {
-        await notificationService.subscribeToPush();
-        await update({ notificationsEnabled: true });
-      } else {
-        await notificationService.unsubscribeFromPush();
-        await update({ notificationsEnabled: false });
-      }
+      const health = await api.getGeminiHealth();
+      setGeminiHealth(health);
     } catch (error) {
-      console.error('Failed to toggle notifications:', error);
+      setGeminiHealth({ status: 'unhealthy', message: 'Failed to fetch status', apiKeyValid: false });
+    } finally {
+      setGeminiHealthLoading(false);
     }
   };
 
@@ -108,7 +110,7 @@ export function PreferencesModal({ onClose }: Props) {
               </select>
             </div>
 
-            <div className={styles.settingItem}>
+            {/* <div className={styles.settingItem}>
               <div className={styles.settingLabel}>Language</div>
               <select
                 className={styles.dropdown}
@@ -121,14 +123,76 @@ export function PreferencesModal({ onClose }: Props) {
                 <option value="fr">French</option>
                 <option value="de">German</option>
               </select>
+            </div> */}
+          </div>
+        );
+
+      case 'notifications':
+        return (
+          <div className={styles.tabContent}>
+            <div className={styles.section}>
+              <div className={styles.settingItem}>
+                <div className={styles.settingColumn}>
+                  <div className={styles.settingLabel}>Enable Push Notifications</div>
+                </div>
+                <div className={styles.settingControl}>
+                  <label className={styles.toggleWrapper}>
+                    <input
+                      type="checkbox"
+                      className={styles.toggleInput}
+                      checked={prefs.notifications?.enabled || false}
+                      onChange={(e) => update({ 
+                        notifications: { 
+                          ...prefs.notifications, 
+                          enabled: e.target.checked 
+                        } 
+                      })}
+                    />
+                    <span className={styles.toggleSlider}></span>
+                  </label>
+                </div>
+              </div>
             </div>
+
+            {/* Topic Instructions Section */}
+            <div className={styles.section}>
+              <div className={styles.description}>
+                To receive push notifications, subscribe to the following <a href="https://ntfy.sh" target="_blank" rel="noopener noreferrer"><strong>ntfy</strong></a> topic: 
+              </div>
+              <div className={styles.codeBlock}>
+                {machineId ? `cui-${machineId}` : 'Loading...'}
+              </div>
+            </div>
+
+            <div className={styles.section}>
+              <h3 className={styles.sectionTitle}>Advanced</h3>
+              <div className={styles.settingItem}>
+                <div className={styles.settingColumn}>
+                  <div className={styles.settingLabel}>Ntfy Server URL</div>
+                </div>
+                <input
+                  type="url"
+                  className={styles.inputText}
+                  value={prefs.notifications?.ntfyUrl || ''}
+                  placeholder="https://ntfy.sh"
+                  onChange={(e) => update({ 
+                    notifications: { 
+                      ...prefs.notifications, 
+                      enabled: prefs.notifications?.enabled || false,
+                      ntfyUrl: e.target.value || undefined
+                    } 
+                  })}
+                />
+              </div>
+            </div>
+
           </div>
         );
 
       case 'dataControls':
         return (
           <div className={styles.tabContent}>
-            <div className={styles.sessionSection}>
+            <div className={styles.section}>
               <h3 className={styles.sectionTitle}>Session Management</h3>
               <button onClick={handleArchiveAll} className={styles.archiveButton}>
                 Archive All Sessions
@@ -142,6 +206,93 @@ export function PreferencesModal({ onClose }: Props) {
           </div>
         );
 
+      case 'voiceInput':
+        return (
+          <div className={styles.tabContent}>
+            <div className={styles.section}>
+              <div className={styles.settingItem}>
+                <div className={styles.settingLabel}>Gemini API Status</div>
+                <div className={styles.settingValue}>
+                  {geminiHealthLoading ? (
+                    'Loading...'
+                  ) : geminiHealth ? (
+                    geminiHealth.status === 'healthy' ? (
+                      <span style={{ color: 'var(--color-success)' }}>Success</span>
+                    ) : (
+                      <span style={{ color: 'var(--color-text-secondary)' }}>Error</span>
+                    )
+                  ) : (
+                    <button 
+                      onClick={handleCheckGeminiHealth}
+                      style={{ 
+                        background: 'transparent',
+                        color: 'var(--color-text-primary)',
+                        cursor: 'pointer',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.color = 'var(--color-text-primary)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.color = 'var(--color-text-primary)';
+                      }}
+                    >
+                      Check Status
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {geminiHealth?.status === 'unhealthy' && (
+            <div className={styles.section}>
+              <h3 className={styles.sectionTitle}>Enable Voice Input</h3>
+              
+              <div className={styles.description}>
+                To enable Gemini-powered voice input, you need to configure a Google API key:
+              </div>
+
+              <div className={styles.settingItem}>
+                <div className={styles.settingLabel}>1. Get a API key</div>
+                <div className={styles.description}>
+                  Visit <a 
+                    href="https://aistudio.google.com/apikey" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                  >
+                      https://aistudio.google.com/apikey
+                  </a> to generate your free API key.
+                </div>
+              </div>
+
+              <div className={styles.settingItem}>
+                <div className={styles.settingLabel}>2. Configure API Environment Variable</div>
+                
+                <div style={{ marginTop: '12px' }}>
+                  <div className={styles.codeBlock}>
+                    export GOOGLE_API_KEY="your-api-key"
+                  </div>
+                </div>
+
+              </div>
+
+              <div className={styles.settingItem}>
+                <div className={styles.settingLabel}>Or Edit ~/.cui/config.json</div>
+                
+                <div style={{ marginTop: '12px' }}>
+                  <div className={styles.codeBlock}>
+                    {`{ "gemini": { "apiKey": "your-api-key" } }`}
+                  </div>
+                </div>
+              </div>
+            </div>
+            )}
+
+            <div className={styles.settingItem} style={{ fontStyle: 'italic', marginTop: '12px' }}>
+              i. When using Gemini voice input, your audio data will be sent to Google for processing. Free Tier API Key allows Google to train on your data. <br></br>
+              ii. On iOS Safari, you need HTTPS to use voice input.
+            </div>
+          </div>
+        );
 
       default:
         return (

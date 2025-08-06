@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 CUI (Claude Code Web UI) is a web interface for the Claude CLI tool. It consists of:
 - TypeScript Express backend that manages Claude CLI processes
-- React frontend with TUI-inspired design
+- React frontend with ultra clean minimalistic design
 - Single-port architecture (port 3001)
   - Development: Uses vite-express for hot reloading
   - Production: Serves pre-built static files from dist/web
@@ -17,26 +17,26 @@ CUI (Claude Code Web UI) is a web interface for the Claude CLI tool. It consists
 
 ### Development
 ```bash
-npm run dev          # Start dev server (backend + frontend on port 3001)
-npm run build        # Build both frontend and backend
-npm run test         # Run all tests
-npm run typecheck    # TypeScript type checking
-npm run lint         # ESLint checking
+bun run dev          # Start dev server (backend + frontend on port 3001)
+bun run build        # Build both frontend and backend
+bun run test         # Run all tests
+bun run typecheck    # TypeScript type checking
+bun run lint         # ESLint checking
 ```
 
 ### Testing
 ```bash
-npm run test                # Run all tests
-npm run unit-tests          # Run unit tests only
-npm run integration-tests   # Run integration tests only
-npm run test:coverage       # Generate coverage report
-npm run test:watch          # Watch mode for TDD
+bun run test                # Run all tests
+bun run unit-tests          # Run unit tests only
+bun run integration-tests   # Run integration tests only
+bun run test:coverage       # Generate coverage report
+bun run test:watch          # Watch mode for TDD
 ```
 
 ### Running a Single Test
 ```bash
-npx jest tests/unit/services/ClaudeProcessManager.test.ts  # Run specific test file
-npx jest -t "test name"                                    # Run test by name pattern
+bunx jest tests/unit/services/ClaudeProcessManager.test.ts  # Run specific test file
+bunx jest -t "test name"                                    # Run test by name pattern
 ```
 
 ## Architecture Overview
@@ -52,7 +52,7 @@ npx jest -t "test name"                                    # Run test by name pa
 - **chat/**: Main chat application components
 - **inspector/**: Inspector/log monitor components  
 - **api/**: API client using fetch for backend communication
-- **styles/**: CSS modules with TUI-inspired design
+- **styles/**: CSS modules with ultra clean minimalistic and modern design. Muted with mostly black and white colors.
 
 ### API Routes (`src/routes/`)
 - Conversations API: Start, list, get, continue, stop conversations
@@ -86,8 +86,8 @@ npx jest -t "test name"                                    # Run test by name pa
 
 ### Common Debugging
 
-- Enable debug logs: `LOG_LEVEL=debug npm run dev`
-- Test logs are silenced by default, use `npm run test:debug` for verbose output
+- Enable debug logs: `LOG_LEVEL=debug bun run dev`
+- Test logs are silenced by default, use `bun run test:debug` for verbose output
 - Check `~/.cui/config.json` for server configuration
 - MCP configuration is in `config/mcp-config.json`
 
@@ -108,8 +108,8 @@ Sessions are automatically migrated to include these fields when the schema vers
 
 ## Development Gotchas
 
-- Do not run npm run dev to verify frontend update
-- Before running test for the first time, run `npm run build` to build the backend and frontend, especially it build the mcp executable. Other wise the test will fail with Error: MCP tool mcp__cui-permissions__approval_prompt (passed via --permission-prompt-tool) not found.
+- Do not run bun run dev to verify frontend update
+- Before running test for the first time, run `bun run build` to build the backend and frontend, especially it build the mcp executable. Other wise the test will fail with Error: MCP tool mcp__cui-permissions__approval_prompt (passed via --permission-prompt-tool) not found.
 
 ## Best Practices
 
@@ -118,3 +118,4 @@ Sessions are automatically migrated to include these fields when the schema vers
 ## Project Memories
 
 - Migration is not needed for project at this stage
+- The auth is disabled in unit tests
