@@ -22,7 +22,7 @@ export function FallbackTool({ toolName, input, result }: FallbackToolProps) {
   return (
     <ToolCollapse 
       summaryText={`${toolName} completed`}
-      defaultExpanded={false}
+      toolName="FallbackTool"
       ariaLabel={`Toggle ${toolName} details`}
     >
       <div className="space-y-1">

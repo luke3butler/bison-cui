@@ -22,6 +22,11 @@ export interface GeminiConfig {
   model?: string;
 }
 
+export interface ToolCollapsePreferences {
+  preset: 'default' | 'minimal' | 'custom';
+  customCollapsed?: string[]; // Only used when preset = 'custom'
+}
+
 export interface InterfaceConfig {
   colorScheme: 'light' | 'dark' | 'system';
   language: string;
@@ -34,6 +39,7 @@ export interface InterfaceConfig {
       vapidPrivateKey?: string;
     };
   };
+  toolCollapse?: ToolCollapsePreferences;
 }
 
 export interface CUIConfig {
@@ -81,6 +87,9 @@ export const DEFAULT_CONFIG: Omit<CUIConfig, 'machine_id' | 'authToken'> = {
   },
   interface: {
     colorScheme: 'system',
-    language: 'en'
+    language: 'en',
+    toolCollapse: {
+      preset: 'default'
+    }
   }
 };

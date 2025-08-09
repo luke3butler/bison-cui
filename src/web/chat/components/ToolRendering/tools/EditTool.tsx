@@ -65,7 +65,7 @@ export function EditTool({ input, result, isMultiEdit = false, workingDirectory 
   return (
     <ToolCollapse 
       summaryText="File changes"
-      defaultExpanded={true}
+      toolName="EditTool"
       ariaLabel="Toggle file changes"
     >
       {renderContent()}

@@ -31,7 +31,7 @@ export function SearchTool({ input, result, toolType }: SearchToolProps) {
   return (
     <ToolCollapse 
       summaryText={getSummaryText()}
-      defaultExpanded={false}
+      toolName="SearchTool"
       ariaLabel={`Toggle ${getSummaryText().toLowerCase()} details`}
     >
       {result && (

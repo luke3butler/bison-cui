@@ -17,7 +17,7 @@ export function WriteTool({ input, result, workingDirectory }: WriteToolProps) {
   return (
     <ToolCollapse 
       summaryText="New file created"
-      defaultExpanded={true}
+      toolName="WriteTool"
       ariaLabel="Toggle new file content"
     >
       <DiffViewer

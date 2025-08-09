@@ -85,6 +85,11 @@ export interface WorkingDirectoriesResponse {
   totalCount: number;
 }
 
+export interface ToolCollapsePreferences {
+  preset: 'default' | 'minimal' | 'custom';
+  customCollapsed?: string[]; // Only used when preset = 'custom'
+}
+
 export interface Preferences {
   colorScheme: 'light' | 'dark' | 'system';
   language: string;
@@ -92,6 +97,7 @@ export interface Preferences {
     enabled: boolean;
     ntfyUrl?: string;
   };
+  toolCollapse?: ToolCollapsePreferences;
 }
 
 // Tool result types

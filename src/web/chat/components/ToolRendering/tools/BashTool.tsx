@@ -12,7 +12,7 @@ export function BashTool({ input, result }: BashToolProps) {
   return (
     <ToolCollapse 
       summaryText="Command output"
-      defaultExpanded={true}
+      toolName="BashTool"
       ariaLabel="Toggle command output"
     >
       <CodeHighlight

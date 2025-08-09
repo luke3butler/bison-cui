@@ -1,21 +1,32 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CornerDownRight } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/web/chat/components/ui/collapsible';
+import { usePreferences } from '../../hooks/usePreferences';
+import { isToolCollapsedByDefault } from '../../utils/tool-collapse';
 
 interface ToolCollapseProps {
   summaryText: string;
-  defaultExpanded?: boolean;
+  toolName: string;
   children: React.ReactNode;
   ariaLabel?: string;
 }
 
 export function ToolCollapse({ 
   summaryText, 
-  defaultExpanded = false, 
+  toolName,
   children, 
   ariaLabel 
 }: ToolCollapseProps) {
-  const [isExpanded, setIsExpanded] = useState(defaultExpanded);
+  const { preferences } = usePreferences();
+  
+  const [isExpanded, setIsExpanded] = useState(() => 
+    !isToolCollapsedByDefault(toolName, preferences?.toolCollapse)
+  );
+  
+  // Update when preferences change
+  useEffect(() => {
+    setIsExpanded(!isToolCollapsedByDefault(toolName, preferences?.toolCollapse));
+  }, [toolName, preferences?.toolCollapse]);
   
   return (
     <div className="flex flex-col gap-1 -mt-0.5">

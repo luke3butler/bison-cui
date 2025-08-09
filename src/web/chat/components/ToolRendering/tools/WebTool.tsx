@@ -52,7 +52,7 @@ export function WebTool({ input, result, toolType }: WebToolProps) {
     <div className="flex flex-col gap-1 -mt-0.5">
       <ToolCollapse 
         summaryText={getSummaryText()}
-        defaultExpanded={false}
+        toolName="WebTool"
         ariaLabel={`Toggle ${getSummaryText().toLowerCase()} details`}
       >
         {result && (

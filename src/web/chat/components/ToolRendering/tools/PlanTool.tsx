@@ -14,7 +14,7 @@ export function PlanTool({ input, result }: PlanToolProps) {
   return (
     <ToolCollapse 
       summaryText="Implementation plan"
-      defaultExpanded={true}
+      toolName="PlanTool"
       ariaLabel="Toggle implementation plan"
     >
       <div className="bg-secondary rounded-xl p-4 mt-1 border-l-3 border-accent prose prose-sm prose-neutral dark:prose-invert max-w-none">

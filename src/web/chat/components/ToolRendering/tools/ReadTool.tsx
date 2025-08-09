@@ -34,7 +34,7 @@ export function ReadTool({ input, result, workingDirectory }: ReadToolProps) {
   return (
     <ToolCollapse 
       summaryText={`Read ${lineCount} line${lineCount !== 1 ? 's' : ''}`}
-      defaultExpanded={false}
+      toolName="ReadTool"
       ariaLabel="Toggle file content"
     >
       {cleanedContent && (

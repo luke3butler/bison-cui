@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { Settings, Bell, Shield, Mic, X, Cpu } from 'lucide-react';
+import { Settings, Bell, Shield, Mic, X, Cpu, Monitor } from 'lucide-react';
 import { api } from '../../services/api';
 import type { Preferences, GeminiHealthResponse } from '../../types';
 import type { CUIConfig } from '../../../../types/config';
 import { ModelProviderTab } from './ModelProviderTab';
 import { NotificationTab } from './NotificationTab';
+import { ToolDisplayTab } from './ToolDisplayTab';
 import { Dialog } from '../Dialog';
 import { Button } from '../ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
@@ -142,6 +143,14 @@ export function PreferencesModal({ onClose }: Props) {
                   <span className="text-left">General</span>
                 </TabsTrigger>
                 <TabsTrigger
+                  value="toolDisplay"
+                  className="w-full flex items-center justify-start gap-3 px-3 py-2 rounded-md bg-transparent text-neutral-700 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-neutral-100 hover:bg-neutral-100/60 dark:hover:bg-neutral-800/60 data-[state=active]:bg-neutral-100 dark:data-[state=active]:bg-neutral-800 data-[state=active]:text-neutral-900 dark:data-[state=active]:text-neutral-100 data-[state=active]:font-medium"
+                  aria-label="Tool display settings"
+                >
+                  <Monitor className="h-[18px] w-[18px] flex-shrink-0" />
+                  <span className="text-left">Tool Display</span>
+                </TabsTrigger>
+                <TabsTrigger
                   value="notifications"
                   className="w-full flex items-center justify-start gap-3 px-3 py-2 rounded-md bg-transparent text-neutral-700 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-neutral-100 hover:bg-neutral-100/60 dark:hover:bg-neutral-800/60 data-[state=active]:bg-neutral-100 dark:data-[state=active]:bg-neutral-800 data-[state=active]:text-neutral-900 dark:data-[state=active]:text-neutral-100 data-[state=active]:font-medium"
                   aria-label="Notification settings"
@@ -202,6 +211,10 @@ export function PreferencesModal({ onClose }: Props) {
                   </Select>
                 </div>
                 </div>
+              </TabsContent>
+
+              <TabsContent value="toolDisplay" className="flex-1 overflow-hidden mt-0">
+                <ToolDisplayTab />
               </TabsContent>
 
               <TabsContent value="notifications" className="flex-1 overflow-hidden mt-0">
