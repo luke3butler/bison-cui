@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { CornerDownRight } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/web/chat/components/ui/collapsible';
 import { usePreferences } from '../../hooks/usePreferences';
@@ -11,22 +11,26 @@ interface ToolCollapseProps {
   ariaLabel?: string;
 }
 
-export function ToolCollapse({ 
+export const ToolCollapse = React.memo<ToolCollapseProps>(({ 
   summaryText, 
   toolName,
   children, 
   ariaLabel 
-}: ToolCollapseProps) {
+}) => {
   const { preferences } = usePreferences();
   
-  const [isExpanded, setIsExpanded] = useState(() => 
-    !isToolCollapsedByDefault(toolName, preferences?.toolCollapse)
+  // Memoize the expensive calculation to avoid duplicate calls
+  const isCollapsedByDefault = useMemo(() => 
+    isToolCollapsedByDefault(toolName, preferences?.toolCollapse),
+    [toolName, preferences?.toolCollapse]
   );
   
-  // Update when preferences change
+  const [isExpanded, setIsExpanded] = useState(() => !isCollapsedByDefault);
+  
+  // Update when our specific calculation changes
   useEffect(() => {
-    setIsExpanded(!isToolCollapsedByDefault(toolName, preferences?.toolCollapse));
-  }, [toolName, preferences?.toolCollapse]);
+    setIsExpanded(!isCollapsedByDefault);
+  }, [isCollapsedByDefault]);
   
   return (
     <div className="flex flex-col gap-1 -mt-0.5">
@@ -50,4 +54,6 @@ export function ToolCollapse({
       </Collapsible>
     </div>
   );
-}
+});
+
+ToolCollapse.displayName = 'ToolCollapse';
