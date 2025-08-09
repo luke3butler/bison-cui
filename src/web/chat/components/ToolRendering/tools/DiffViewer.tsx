@@ -21,7 +21,7 @@ interface DiffViewerProps {
   language?: string;
 }
 
-export function DiffViewer({ oldValue, newValue, language = 'javascript' }: DiffViewerProps) {
+export const DiffViewer = React.memo<DiffViewerProps>(({ oldValue, newValue, language = 'javascript' }) => {
   const theme = useTheme();
   const isDark = theme.mode === 'dark';
   const [isExpanded, setIsExpanded] = useState(false);
@@ -241,4 +241,6 @@ export function DiffViewer({ oldValue, newValue, language = 'javascript' }: Diff
       />
     </div>
   );
-}
+});
+
+DiffViewer.displayName = 'DiffViewer';

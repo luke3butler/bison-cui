@@ -208,7 +208,7 @@ const lightTheme = {
   ],
 };
 
-export const CodeHighlight: React.FC<CodeHighlightProps> = ({
+export const CodeHighlight: React.FC<CodeHighlightProps> = React.memo(({
   code,
   language,
   showLineNumbers = false,
@@ -301,4 +301,6 @@ export const CodeHighlight: React.FC<CodeHighlightProps> = ({
       }}
     </Highlight>
   );
-};
+});
+
+CodeHighlight.displayName = 'CodeHighlight';

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { api } from '../services/api';
 import type { Preferences, Theme } from '../types';
 
@@ -90,33 +90,39 @@ export function PreferencesProvider({ children }: { children: React.ReactNode })
     }
   }, []);
 
-  const toggle = useCallback(async () => {
-    // Cycle through: light -> dark -> system -> light
-    let newColorScheme: 'light' | 'dark' | 'system';
-    if (theme.colorScheme === 'light') {
-      newColorScheme = 'dark';
-    } else if (theme.colorScheme === 'dark') {
-      newColorScheme = 'system';
-    } else {
-      newColorScheme = 'light';
-    }
-    
-    await updatePreferences({ colorScheme: newColorScheme });
-  }, [theme.colorScheme, updatePreferences]);
+  // Memoize theme with toggle to prevent recreation on every render
+  const themeWithToggle = useMemo(() => {
+    const toggle = async () => {
+      // Cycle through: light -> dark -> system -> light
+      let newColorScheme: 'light' | 'dark' | 'system';
+      if (theme.colorScheme === 'light') {
+        newColorScheme = 'dark';
+      } else if (theme.colorScheme === 'dark') {
+        newColorScheme = 'system';
+      } else {
+        newColorScheme = 'light';
+      }
+      
+      await updatePreferences({ colorScheme: newColorScheme });
+    };
 
-  const themeWithToggle: Theme = {
-    ...theme,
-    toggle
-  };
+    return {
+      ...theme,
+      toggle
+    };
+  }, [theme, updatePreferences]);
+
+  // Memoize context value to prevent recreation when dependencies haven't changed
+  const contextValue = useMemo(() => ({
+    preferences,
+    theme: themeWithToggle,
+    updatePreferences,
+    isLoading,
+    error
+  }), [preferences, themeWithToggle, updatePreferences, isLoading, error]);
 
   return (
-    <PreferencesContext.Provider value={{ 
-      preferences, 
-      theme: themeWithToggle, 
-      updatePreferences, 
-      isLoading, 
-      error 
-    }}>
+    <PreferencesContext.Provider value={contextValue}>
       {children}
     </PreferencesContext.Provider>
   );
