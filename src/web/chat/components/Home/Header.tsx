@@ -5,7 +5,7 @@ import { PreferencesModal } from '../PreferencesModal/PreferencesModal';
 import { Button } from '@/web/chat/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/web/chat/components/ui/tooltip';
 
-export function Header() {
+export const Header = React.memo(() => {
   const theme = useTheme();
   const [showPrefs, setShowPrefs] = useState(false);
   
@@ -56,4 +56,6 @@ export function Header() {
       {showPrefs && <PreferencesModal onClose={handleCloseSettings} />}
     </>
   );
-}
+});
+
+Header.displayName = 'Header';
