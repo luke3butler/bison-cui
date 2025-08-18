@@ -6,6 +6,7 @@ import { Button } from '@/web/chat/components/ui/button';
 import { Input } from '@/web/chat/components/ui/input';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/web/chat/components/ui/tooltip';
 import { MoreOptionsMenu } from '../MoreOptionsMenu';
+import { ToolDisplaySelector } from '../ToolDisplaySelector';
 
 interface ConversationHeaderProps {
   title: string;
@@ -181,6 +182,10 @@ export function ConversationHeader({ title, sessionId, isArchived = false, isPin
               <p>{isArchived ? 'Unarchive Task' : 'Archive Task'}</p>
             </TooltipContent>
           </Tooltip>
+          
+          <div className="w-px h-4 bg-border mx-1" />
+          
+          <ToolDisplaySelector />
           
           {sessionId && (
             <MoreOptionsMenu
